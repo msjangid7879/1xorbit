@@ -42,7 +42,7 @@ export default function LandingPage({ onLoginSuccess }) {
   const handleSignup = async (e) => {
     e.preventDefault();
     try {
-      const res = await api.post('/api/auth/register', {
+      const res = await api.post('/auth/register', {
         companyName,
         subdomain,
         adminName,
