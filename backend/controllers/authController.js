@@ -4,7 +4,7 @@ const pool = require('../config/db');
 exports.registerCompany = async (req, res) => {
   try {
     const { companyName, subdomain, adminName, adminUsername, adminPassword, email, phone } = req.body;
-    
+
     // 1. Create Tenant
     const tenantQuery = 'INSERT INTO tenants (company_name, subdomain) VALUES ($1, $2) RETURNING id;';
     const tenantRes = await pool.query(tenantQuery, [companyName, subdomain]);
@@ -27,21 +27,27 @@ exports.registerCompany = async (req, res) => {
   }
 };
 
-// Username & Password Login (Direct Match Safe Mode)
 exports.login = async (req, res) => {
   try {
     const { username, password } = req.body;
-    console.log("Login attempt received for username:", username);
+    console.log("Login attempt - Username:", JSON.stringify(username), "Password Received:", JSON.stringify(password));
 
-    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    
+    const { rows } = await pool.query('SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM($1))', [username]);
     
     if (rows.length === 0) {
+      console.log("User not found in database for username:", username);
       return res.status(401).json({ message: 'User not found' });
     }
 
     const user = rows[0];
-    
-    // Direct safe check (allows login if username matches)
+    console.log("DB Password:", JSON.stringify(user.password_hash), "| User Entered Password:", JSON.stringify(password));
+
+    if (String(user.password_hash).trim() !== String(password).trim()) {
+      console.log("Password mismatch!");
+      return res.status(401).json({ message: 'Invalid password' });
+    }
+
     console.log("Login successful for:", user.username);
     delete user.password_hash;
     res.json({ message: 'Login successful', user });
@@ -57,7 +63,7 @@ exports.getUsers = async (req, res) => {
     const { tenant_id } = req.query;
     let query = 'SELECT id, tenant_id, username, name, email, phone, role, department, is_company_admin, permissions, bio, profile_pic, created_at FROM users';
     let values = [];
-    
+
     if (tenant_id) {
       query += ' WHERE tenant_id = $1';
       values.push(tenant_id);
@@ -84,13 +90,13 @@ exports.addUser = async (req, res) => {
     const permString = typeof permissions === 'object' ? JSON.stringify(permissions) : JSON.stringify({ can_view_dashboard: true, can_assign_tasks: true });
     const values = [
       tenant_id || 1,
-      username, 
-      password, 
-      name, 
-      email || null, 
-      phone || null, 
-      role || 'Employee', 
-      department || 'Operations', 
+      username,
+      password,
+      name,
+      email || null,
+      phone || null,
+      role || 'Employee',
+      department || 'Operations',
       permString,
       bio || null,
       profile_pic || null
@@ -121,12 +127,12 @@ exports.updateUser = async (req, res) => {
       WHERE id = $8 
       RETURNING id, tenant_id, name, username, email, role, department, permissions, bio, profile_pic;
     `;
-    
+
     const { rows } = await pool.query(query, [
-      name || null, 
-      email || null, 
-      role || null, 
-      department || null, 
+      name || null,
+      email || null,
+      role || null,
+      department || null,
       permissions ? JSON.stringify(permissions) : null,
       bio || null,
       profile_pic || null,
